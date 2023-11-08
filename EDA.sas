@@ -100,6 +100,23 @@ proc sgplot data=mean_bmi_by_smoking;
     title 'Mean BMI by Age and Smoking Status';
 run;
 
+/* Calculate the variance of BMI for each age group */
+proc means data=myhome.BMILDA noprint;
+    class AGE;
+    var BMI;
+    output out=age_variance (drop=_TYPE_ _FREQ_) var=Variance_BMI;
+run;
+
+
+/* Plot the variance of BMI by AGE */
+proc sgplot data=age_variance;
+    series x=AGE y=Variance_BMI / markers lineattrs=(thickness=2);
+    xaxis label='Age';
+    yaxis label='Variance of BMI';
+    title 'Variance of BMI by Age';
+run;
+
+
 /* Define an attribute map to control line colors */
 proc template;
     define statgraph bmicolors;
@@ -125,3 +142,60 @@ run;
 proc sgrender data=mean_bmi_by_smoking template=bmicolors;
     dynamic _ATTRS='attrmap' _STATS='smoking_status';
 run;
+
+
+proc gplot data=myhome.BMILDA;
+	plot BMI*AGE / haxis=axis1 vaxis=axis2;
+	symbol c=red i=std1mjt w=2 mode=include;
+	axis1 label=(h=2 ’Age (years)’) value=(h=1.5) order=(10 to 100 by 10) minor=none;
+	axis2 label=(h=2 A=90 ’BMI’) value=(h=1.5) order=(10 to 50 by 5)
+	minor=none;
+	title 'Average evolution, with standard errors of means';
+run;quit;
+
+
+/* First, calculate the smoking percentage for each individual */
+proc sql;
+    create table smoking_percentage as
+    select ID, (sum(SMOKING) / count(SMOKING)) * 100 as Smoking_Percent
+    from myhome.BMILDA
+    group by ID;
+quit;
+
+/* Merge the smoking percentage back to the original dataset */
+proc sql;
+    create table BMILDA_with_smoking as
+    select a.*, b.Smoking_Percent
+    from myhome.BMILDA as a
+    left join smoking_percentage as b
+    on a.ID = b.ID;
+quit;
+
+/* Sort the data by ID to prepare for BY-group processing */
+proc sort data=BMILDA_with_smoking;
+    by ID;
+run;
+
+
+ods output ParameterEstimates=reg_params;
+proc glm data=myhome.BMILDA;
+    model BMI = Time SMOKING Time*SMOKING / solution;
+    by ID;
+    output out=estimates p=predicted_values r=residuals;
+run;
+ods output close;
+
+
+
+
+/* Merge the additional variables back with the regression estimates */
+proc sql;
+    create table final_results as
+    select a.ID, b.FAGE, b.SEX, b.SMOKING, 
+           a.Intercept, a.Time, a.Time_SMOKING /* Replace with actual variable names from reg_params */
+    from estimates as a
+    inner join (select distinct ID, FAGE, SEX, SMOKING from BMILDA_with_smoking) as b
+    on a.ID = b.ID;
+quit;
+
+
