@@ -11,8 +11,8 @@ proc sort data=myhome.sampled_data;
   by ID TIME;
 run;
 
-/* Step 3: Set the graphics environment to generate PNG format */
-ods graphics on / imagefmt=png;
+/* Step 3: Set the graphics environment to generate PNG format (image is save under the name specified by imagename) */
+ods graphics on / imagefmt=png imagename="spaghetti";
 
 /* Step 4: Open the HTML5 destination to save the plot as a PNG file */
 ods html5 file='/home/u59906376/spaghetti_plot.html' 
